@@ -1,0 +1,92 @@
+# Cluster-Specific Overrides - East Region
+# Dubai Production Cluster
+
+# Cluster metadata
+labels:
+  cluster: prod-east
+  region: uae-dubai
+  datacenter: dc1
+
+annotations:
+  cluster-name: "prod-east-dubai"
+  region: "uae-dubai"
+  contact: "platform-dubai@emiratesnbd.com"
+
+# Region-specific repositories
+argocd:
+  repositories:
+    - url: https://github.com/emiratesnbd/prod-gitops-east
+      name: prod-gitops-east
+      type: git
+    - url: https://github.com/emiratesnbd/helm-charts-east
+      name: internal-charts-east
+      type: helm
+  
+  # Regional cluster configurations
+  clusters:
+    - name: prod-east-dubai
+      server: https://api.prod-east.emiratesnbd.local:6443
+      config:
+        tlsClientConfig:
+          insecure: false
+          caData: ""  # Add CA certificate
+    - name: prod-east-abu-dhabi
+      server: https://api.prod-east-auh.emiratesnbd.local:6443
+      config:
+        tlsClientConfig:
+          insecure: false
+  
+  # Regional projects
+  projects:
+    - name: uae-applications
+      description: UAE Regional Applications
+      sourceRepos:
+        - 'https://github.com/emiratesnbd/uae-*'
+      destinations:
+        - namespace: 'uae-*'
+          server: https://api.prod-east.emiratesnbd.local:6443
+        - namespace: 'uae-*'
+          server: https://api.prod-east-auh.emiratesnbd.local:6443
+      clusterResourceWhitelist:
+        - group: ''
+          kind: Namespace
+  
+  # Regional banner
+  banner:
+    enabled: true
+    content: "🌍 UAE REGION - Dubai Production Cluster"
+    url: ""
+
+# Node selector for east region
+nodeSelector:
+  topology.kubernetes.io/region: uae-dubai
+  node-role.kubernetes.io/infra: ""
+
+# Tolerations
+tolerations:
+  - key: "region"
+    operator: "Equal"
+    value: "uae-dubai"
+    effect: "NoSchedule"
+
+# Affinity for regional pod placement
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: topology.kubernetes.io/region
+              operator: In
+              values:
+                - uae-dubai
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - openshift-gitops
+          topologyKey: topology.kubernetes.io/zone

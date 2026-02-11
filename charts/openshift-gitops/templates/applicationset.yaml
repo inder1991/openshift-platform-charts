@@ -1,0 +1,75 @@
+{{- if .Values.argocd.enabled }}
+{{- if .Values.argocd.applicationSet.enabled }}
+# Example ApplicationSet for managing multiple environments
+# This is a reference example - customize based on your needs
+---
+apiVersion: {{ include "applicationset.apiVersion" . }}
+kind: ApplicationSet
+metadata:
+  name: {{ .Values.argocd.name }}-platform-apps
+  namespace: {{ include "openshift-gitops.argocdNamespace" . }}
+  labels:
+    {{- include "openshift-gitops.labels" . | nindent 4 }}
+  {{- with (include "openshift-gitops.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  # Generator for creating applications across multiple environments
+  generators:
+    - list:
+        elements:
+          - environment: dev
+            namespace: dev-apps
+            project: dev-apps
+            repoURL: https://github.com/emiratesnbd/dev-gitops
+            path: applications
+          
+          - environment: staging
+            namespace: staging-apps
+            project: staging-apps
+            repoURL: https://github.com/emiratesnbd/staging-gitops
+            path: applications
+          
+          - environment: prod
+            namespace: prod-apps
+            project: prod-applications
+            repoURL: https://github.com/emiratesnbd/prod-gitops
+            path: applications
+  
+  # Template for creating Applications
+  template:
+    metadata:
+      name: '{{`{{environment}}`}}-platform-apps'
+      labels:
+        environment: '{{`{{environment}}`}}'
+        managed-by: applicationset
+    
+    spec:
+      project: '{{`{{project}}`}}'
+      
+      source:
+        repoURL: '{{`{{repoURL}}`}}'
+        targetRevision: main
+        path: '{{`{{path}}`}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{`{{namespace}}`}}'
+      
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+{{- end }}
+{{- end }}

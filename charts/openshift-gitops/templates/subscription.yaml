@@ -1,0 +1,37 @@
+{{- if .Values.operator.enabled }}
+{{- $_ := include "openshift-gitops.validateValues" . }}
+---
+apiVersion: {{ include "subscription.apiVersion" . }}
+kind: Subscription
+metadata:
+  name: openshift-gitops-operator
+  namespace: {{ include "openshift-gitops.operatorNamespace" . }}
+  labels:
+    {{- include "openshift-gitops.labels" . | nindent 4 }}
+    operators.coreos.com/openshift-gitops-operator.{{ include "openshift-gitops.operatorNamespace" . }}: ""
+  {{- with (include "openshift-gitops.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  # Channel determines the stream of updates
+  # Options: latest, stable, gitops-1.11, gitops-1.12, etc.
+  channel: {{ .Values.operator.channel }}
+  
+  # Install plan approval strategy
+  # Automatic: operator updates are installed automatically
+  # Manual: operator updates require manual approval
+  installPlanApproval: {{ .Values.operator.installPlanApproval }}
+  
+  # Name of the operator
+  name: openshift-gitops-operator
+  
+  # Source catalog
+  source: {{ .Values.operator.source }}
+  sourceNamespace: {{ .Values.operator.sourceNamespace }}
+  
+  {{- if .Values.operator.startingCSV }}
+  # Pin to specific operator version
+  startingCSV: {{ .Values.operator.startingCSV }}
+  {{- end }}
+{{- end }}

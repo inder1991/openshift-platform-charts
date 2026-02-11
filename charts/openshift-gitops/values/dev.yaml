@@ -1,0 +1,146 @@
+# Development Environment Overrides
+# Low resource allocation, permissive RBAC, single replicas
+
+operator:
+  # Auto-approve updates in dev
+  installPlanApproval: Automatic
+
+argocd:
+  # Dev-specific namespace
+  namespace: openshift-gitops-dev
+  name: argocd-dev
+  
+  server:
+    # Single replica for dev
+    replicas: 1
+    
+    # Lower resources
+    resources:
+      limits:
+        cpu: 200m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 64Mi
+    
+    # No autoscaling in dev
+    autoscaling:
+      enabled: false
+    
+    # Server config
+    config:
+      # Enable admin for easy debugging
+      admin.enabled: true
+  
+  repo:
+    replicas: 1
+    
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+  
+  controller:
+    replicas: 1
+    
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    
+    # Lower processing limits
+    processors:
+      operation: 5
+      status: 10
+  
+  redis:
+    resources:
+      limits:
+        cpu: 200m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 64Mi
+  
+  # No HA in dev
+  ha:
+    enabled: false
+  
+  # Disable Dex, use OpenShift OAuth
+  dex:
+    enabled: false
+  
+  sso:
+    enabled: true
+    provider: openshift
+  
+  # More permissive RBAC for dev
+  rbac:
+    defaultPolicy: 'role:admin'
+    policy: |
+      p, role:org-admin, applications, *, */*, allow
+      p, role:org-admin, clusters, get, *, allow
+      p, role:org-admin, repositories, *, *, allow
+      g, system:cluster-admins, role:org-admin
+      g, cluster-admins, role:org-admin
+  
+  # Dev repositories
+  repositories:
+    - url: https://github.com/emiratesnbd/dev-gitops
+      name: dev-gitops
+      type: git
+    - url: https://charts.bitnami.com/bitnami
+      name: bitnami
+      type: helm
+  
+  # Dev projects
+  projects:
+    - name: dev-apps
+      description: Development Applications
+      sourceRepos:
+        - 'https://github.com/emiratesnbd/*'
+        - 'https://charts.bitnami.com/*'
+      destinations:
+        - namespace: 'dev-*'
+          server: https://kubernetes.default.svc
+        - namespace: 'openshift-gitops-dev'
+          server: https://kubernetes.default.svc
+      clusterResourceWhitelist:
+        - group: ''
+          kind: Namespace
+        - group: 'rbac.authorization.k8s.io'
+          kind: ClusterRole
+        - group: 'rbac.authorization.k8s.io'
+          kind: ClusterRoleBinding
+  
+  # Enable notifications for dev
+  notifications:
+    enabled: true
+    replicas: 1
+  
+  # Enable ApplicationSet
+  applicationSet:
+    enabled: true
+    replicas: 1
+  
+  # Dev environment banner
+  banner:
+    enabled: true
+    content: "⚠️ DEVELOPMENT ENVIRONMENT - Not for production use"
+    url: ""
+
+# Labels for dev environment
+labels:
+  environment: dev
+  managed-by: platform-engineering
+
+# Annotations
+annotations:
+  environment: dev
+  team: platform-engineering

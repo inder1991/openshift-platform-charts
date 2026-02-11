@@ -1,0 +1,374 @@
+# Default values for openshift-gitops v1.1.0
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Operator Configuration
+operator:
+  # Enable operator installation via OLM subscription
+  enabled: true
+  
+  # Create operator namespace (set to false if OLM should manage it)
+  createNamespace: false
+  
+  # Namespace for the operator itself
+  namespace: openshift-gitops-operator
+  
+  # OLM channel (latest, stable, gitops-1.11, gitops-1.12, etc.)
+  channel: latest
+  
+  # Installation approval (Automatic or Manual)
+  # Use Manual for production to control updates
+  installPlanApproval: Automatic
+  
+  # Starting CSV (optional - pins to specific version)
+  # Leave empty for latest version in channel
+  startingCSV: ""
+  
+  # Operator source
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+
+# ArgoCD Instance Configuration
+argocd:
+  # Enable ArgoCD instance creation
+  enabled: true
+  
+  # Namespace for ArgoCD instance
+  namespace: openshift-gitops
+  
+  # Name of the ArgoCD instance
+  name: openshift-gitops
+  
+  # Resource tracking method for OpenShift (NEW in v1.1.0)
+  # Options: label, annotation, annotation+label
+  resourceTrackingMethod: "annotation+label"
+  
+  # Kustomize build options (NEW in v1.1.0)
+  kustomizeBuildOptions: "--enable-helm"
+  
+  # Server component configuration
+  server:
+    replicas: 2
+    
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 250m
+        memory: 128Mi
+    
+    # Autoscaling configuration (optional)
+    autoscaling:
+      enabled: false
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 80
+      targetMemoryUtilizationPercentage: 80
+    
+    # Route configuration
+    route:
+      enabled: true
+      tls:
+        termination: reencrypt
+        insecureEdgeTerminationPolicy: Redirect
+    
+    # Ingress configuration (alternative to route)
+    ingress:
+      enabled: false
+      className: ""
+      annotations: {}
+      hosts: []
+      tls: []
+    
+    # Insecure mode (NEW in v1.1.0)
+    insecure: false
+    
+    # GRPC configuration (NEW in v1.1.0)
+    grpc:
+      enabled: false
+    
+    # Log level (NEW in v1.1.0)
+    logLevel: "info"
+    
+    # Pod disruption budget for HA (NEW in v1.1.0)
+    pdb:
+      minAvailable: 1
+  
+  # Repository server configuration
+  repo:
+    replicas: 1
+    
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    
+    # Log level (NEW in v1.1.0)
+    logLevel: "info"
+    
+    # Environment variables (NEW in v1.1.0)
+    env: []
+      # Example:
+      # - name: ARGOCD_EXEC_TIMEOUT
+      #   value: "300s"
+    
+    # Volume mounts for custom plugins
+    volumeMounts: []
+    volumes: []
+    
+    # Pod disruption budget for HA (NEW in v1.1.0)
+    pdb:
+      minAvailable: 1
+  
+  # Application controller configuration
+  controller:
+    replicas: 1
+    
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 250m
+        memory: 1Gi
+    
+    # Application controller sharding (for large deployments)
+    sharding:
+      enabled: false
+      replicas: 1
+    
+    # Process specifications
+    processors:
+      operation: 10
+      status: 20
+    
+    # App resync period
+    appResyncPeriod: 180
+    
+    # Self-heal timeout
+    selfHealTimeout: 5
+    
+    # Log level (NEW in v1.1.0)
+    logLevel: "info"
+    
+    # Environment variables (NEW in v1.1.0)
+    env: []
+    
+    # Pod disruption budget for HA (NEW in v1.1.0)
+    pdb:
+      minAvailable: 1
+  
+  # Redis configuration
+  redis:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 250m
+        memory: 128Mi
+  
+  # High Availability configuration
+  ha:
+    enabled: false
+    redisProxyReplicas: 3
+  
+  # Dex (SSO) configuration
+  dex:
+    # Disable Dex and use OpenShift OAuth instead
+    enabled: false
+    
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 250m
+        memory: 128Mi
+  
+  # SSO Configuration
+  sso:
+    # Enable OpenShift OAuth integration
+    enabled: true
+    provider: openshift
+    
+    # OIDC configuration (if using external IdP)
+    oidc:
+      enabled: false
+      name: ""
+      issuer: ""
+      clientID: ""
+      clientSecret: ""
+      requestedScopes: ["openid", "profile", "email", "groups"]
+  
+  # RBAC Configuration
+  rbac:
+    # Default policy for users (role:readonly or role:admin)
+    defaultPolicy: 'role:readonly'
+    
+    # Policy CSV for custom RBAC rules
+    policy: ""
+    
+    # Scopes to examine for RBAC (e.g., groups)
+    scopes: '[groups]'
+  
+  # Initial repositories (configured as Secret resources - NEW in v1.1.0)
+  # NOTE: For production, use ExternalSecrets or SealedSecrets for credentials
+  repositories: []
+    # Example git repository with SSH key:
+    # - url: git@github.com:myorg/repo.git
+    #   name: myrepo
+    #   type: git
+    #   insecure: false
+    #   # For private repos, reference a secret with SSH key
+    #   # Create secret separately with:
+    #   # kubectl create secret generic github-ssh-key \
+    #   #   --from-file=sshPrivateKey=~/.ssh/id_rsa \
+    #   #   -n openshift-gitops
+    #
+    # Example Helm repository:
+    # - url: https://charts.example.com
+    #   name: example-charts
+    #   type: helm
+    #   insecure: false
+    #   # For private helm repos, use username/password
+    #   # username: myuser
+    #   # password: mypass  # Don't commit passwords!
+  
+  # Repository credentials (optional)
+  repositoryCredentials: []
+  
+  # Initial projects (optional)
+  projects: []
+    # Example project:
+    # - name: default
+    #   description: Default project
+    #   sourceRepos:
+    #     - '*'
+    #   destinations:
+    #     - namespace: '*'
+    #       server: '*'
+    #   clusterResourceWhitelist:
+    #     - group: '*'
+    #       kind: '*'
+  
+  # Cluster configurations
+  clusters: []
+    # Example cluster:
+    # - name: cluster-prod-east
+    #   server: https://api.prod-east.example.com:6443
+    #   config:
+    #     bearerToken: ""
+    #     tlsClientConfig:
+    #       insecure: false
+  
+  # Resource customizations
+  resourceCustomizations: ""
+    # Example:
+    # |
+    #   argoproj.io/Application:
+    #     health.lua: |
+    #       hs = {}
+    #       hs.status = "Progressing"
+    #       hs.message = ""
+    #       if obj.status ~= nil then
+    #         if obj.status.health ~= nil then
+    #           hs.status = obj.status.health.status
+    #           if obj.status.health.message ~= nil then
+    #             hs.message = obj.status.health.message
+    #           end
+    #         end
+    #       end
+    #       return hs
+  
+  # Resource exclusions (ignore certain resources)
+  resourceExclusions: ""
+    # Example:
+    # |
+    #   - apiGroups:
+    #       - tekton.dev
+    #     kinds:
+    #       - TaskRun
+    #       - PipelineRun
+    #     clusters:
+    #       - "*"
+  
+  # Notifications configuration
+  notifications:
+    enabled: false
+    replicas: 1
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  
+  # ApplicationSet controller configuration
+  applicationSet:
+    enabled: true
+    replicas: 1
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    
+    # Log level (NEW in v1.1.0)
+    logLevel: "info"
+    
+    # Environment variables (NEW in v1.1.0)
+    env: []
+  
+  # Banner configuration
+  banner:
+    enabled: false
+    content: ""
+    url: ""
+  
+  # Extra configuration for advanced ArgoCD settings (NEW in v1.1.0)
+  extraConfig: {}
+    # Example:
+    # accounts.admin: apiKey, login
+    # accounts.readonly: login
+    # admin.enabled: "false"
+
+# RBAC Resources (ServiceAccount, ClusterRole, ClusterRoleBinding)
+# NOTE: In v1.1.0, these are removed as the operator manages them
+# Only enable if you need CUSTOM additional permissions
+rbac:
+  # Create custom RBAC resources (set to false - operator manages these)
+  create: false
+  
+  # ServiceAccount name
+  serviceAccount:
+    create: false
+    name: openshift-gitops
+    annotations: {}
+  
+  # Additional cluster-wide permissions (only if rbac.create: true)
+  clusterRole:
+    create: false
+    rules: []
+
+# Additional labels to apply to all resources
+labels: {}
+
+# Additional annotations to apply to all resources
+annotations: {}
+
+# Node selector for all pods
+nodeSelector: {}
+
+# Tolerations for all pods
+tolerations: []
+
+# Affinity for all pods
+affinity: {}

@@ -1,0 +1,78 @@
+{{- if .Values.argocd.enabled }}
+{{- range .Values.argocd.projects }}
+---
+apiVersion: {{ include "appproject.apiVersion" $ }}
+kind: AppProject
+metadata:
+  name: {{ .name }}
+  namespace: {{ include "openshift-gitops.argocdNamespace" $ }}
+  labels:
+    {{- include "openshift-gitops.labels" $ | nindent 4 }}
+  {{- with (include "openshift-gitops.annotations" $) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  {{- with .description }}
+  description: {{ . | quote }}
+  {{- end }}
+  
+  # Source repositories allowed for this project
+  sourceRepos:
+    {{- toYaml .sourceRepos | nindent 4 }}
+  
+  # Destination clusters and namespaces
+  destinations:
+    {{- toYaml .destinations | nindent 4 }}
+  
+  {{- with .clusterResourceWhitelist }}
+  # Cluster-scoped resources allowed to be managed
+  clusterResourceWhitelist:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{- with .clusterResourceBlacklist }}
+  # Cluster-scoped resources NOT allowed to be managed
+  clusterResourceBlacklist:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{- with .namespaceResourceWhitelist }}
+  # Namespace-scoped resources allowed to be managed
+  namespaceResourceWhitelist:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{- with .namespaceResourceBlacklist }}
+  # Namespace-scoped resources NOT allowed to be managed
+  namespaceResourceBlacklist:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{- with .roles }}
+  # Project-specific RBAC roles
+  roles:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{- with .syncWindows }}
+  # Sync windows - when sync operations are allowed
+  syncWindows:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{- with .orphanedResources }}
+  # Orphaned resources configuration
+  orphanedResources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{- with .signatureKeys }}
+  # GPG signature keys for signed commits
+  signatureKeys:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

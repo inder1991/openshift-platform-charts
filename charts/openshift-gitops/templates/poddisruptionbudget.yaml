@@ -1,0 +1,59 @@
+{{- if .Values.argocd.ha.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openshift-gitops.fullname" . }}-server
+  namespace: {{ include "openshift-gitops.argocdNamespace" . }}
+  labels:
+    {{- include "openshift-gitops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+  {{- with (include "openshift-gitops.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  minAvailable: {{ .Values.argocd.server.pdb.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-server
+      app.kubernetes.io/part-of: argocd
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openshift-gitops.fullname" . }}-repo-server
+  namespace: {{ include "openshift-gitops.argocdNamespace" . }}
+  labels:
+    {{- include "openshift-gitops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: repo-server
+  {{- with (include "openshift-gitops.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  minAvailable: {{ .Values.argocd.repo.pdb.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-repo-server
+      app.kubernetes.io/part-of: argocd
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "openshift-gitops.fullname" . }}-application-controller
+  namespace: {{ include "openshift-gitops.argocdNamespace" . }}
+  labels:
+    {{- include "openshift-gitops.labels" . | nindent 4 }}
+    app.kubernetes.io/component: application-controller
+  {{- with (include "openshift-gitops.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  minAvailable: {{ .Values.argocd.controller.pdb.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-application-controller
+      app.kubernetes.io/part-of: argocd
+{{- end }}

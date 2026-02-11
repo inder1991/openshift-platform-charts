@@ -1,0 +1,195 @@
+# Staging Environment Overrides
+# Production-like configuration for testing, moderate resources
+
+operator:
+  # Manual approval for better control
+  installPlanApproval: Manual
+
+argocd:
+  # Staging-specific namespace
+  namespace: openshift-gitops-staging
+  name: argocd-staging
+  
+  server:
+    # Multiple replicas for testing HA
+    replicas: 2
+    
+    # Moderate resources
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 250m
+        memory: 128Mi
+    
+    # Test autoscaling
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 3
+      targetCPUUtilizationPercentage: 75
+    
+    config:
+      # Disable admin in staging, use SSO
+      admin.enabled: false
+  
+  repo:
+    # Multiple repo servers
+    replicas: 2
+    
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 512Mi
+  
+  controller:
+    # Multiple controllers for testing
+    replicas: 1
+    
+    resources:
+      limits:
+        cpu: 1500m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    
+    processors:
+      operation: 10
+      status: 15
+  
+  redis:
+    resources:
+      limits:
+        cpu: 300m
+        memory: 256Mi
+      requests:
+        cpu: 150m
+        memory: 128Mi
+  
+  # Test HA configuration
+  ha:
+    enabled: true
+    redisProxyReplicas: 2
+  
+  # Disable Dex, use OpenShift OAuth
+  dex:
+    enabled: false
+  
+  sso:
+    enabled: true
+    provider: openshift
+  
+  # Moderate RBAC - between dev and prod
+  rbac:
+    defaultPolicy: 'role:readonly'
+    policy: |
+      p, role:org-admin, applications, *, */*, allow
+      p, role:org-admin, clusters, get, *, allow
+      p, role:org-admin, repositories, get, *, allow
+      p, role:developer, applications, get, */*, allow
+      p, role:developer, applications, sync, */*, allow
+      g, system:cluster-admins, role:org-admin
+      g, staging-developers, role:developer
+  
+  # Staging repositories
+  repositories:
+    - url: https://github.com/emiratesnbd/staging-gitops
+      name: staging-gitops
+      type: git
+    - url: https://github.com/emiratesnbd/helm-charts
+      name: internal-charts
+      type: helm
+    - url: https://charts.bitnami.com/bitnami
+      name: bitnami
+      type: helm
+  
+  # Staging projects
+  projects:
+    - name: staging-apps
+      description: Staging Applications
+      sourceRepos:
+        - 'https://github.com/emiratesnbd/*'
+        - 'https://charts.bitnami.com/*'
+      destinations:
+        - namespace: 'staging-*'
+          server: https://kubernetes.default.svc
+        - namespace: 'openshift-gitops-staging'
+          server: https://kubernetes.default.svc
+      clusterResourceWhitelist:
+        - group: ''
+          kind: Namespace
+      clusterResourceBlacklist:
+        - group: ''
+          kind: ResourceQuota
+        - group: ''
+          kind: LimitRange
+    
+    - name: platform-services
+      description: Platform Services (Monitoring, Logging)
+      sourceRepos:
+        - 'https://github.com/emiratesnbd/platform-*'
+      destinations:
+        - namespace: 'monitoring'
+          server: https://kubernetes.default.svc
+        - namespace: 'logging'
+          server: https://kubernetes.default.svc
+  
+  # Resource customizations for common use cases
+  resourceCustomizations: |
+    argoproj.io/Application:
+      health.lua: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+        end
+        return hs
+  
+  # Exclude certain resources from sync
+  resourceExclusions: |
+    - apiGroups:
+        - tekton.dev
+      kinds:
+        - TaskRun
+        - PipelineRun
+      clusters:
+        - "*"
+  
+  # Enable notifications
+  notifications:
+    enabled: true
+    replicas: 1
+  
+  # Enable ApplicationSet
+  applicationSet:
+    enabled: true
+    replicas: 1
+  
+  # Staging environment banner
+  banner:
+    enabled: true
+    content: "🔄 STAGING ENVIRONMENT - Pre-production testing"
+    url: ""
+
+# Labels for staging environment
+labels:
+  environment: staging
+  managed-by: platform-engineering
+  backup: "true"
+
+# Annotations
+annotations:
+  environment: staging
+  team: platform-engineering
+  backup-schedule: "0 2 * * *"

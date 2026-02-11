@@ -1,0 +1,90 @@
+{{- if .Values.argocd.enabled }}
+{{- range .Values.argocd.repositories }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-{{ .name | lower | replace " " "-" | replace "_" "-" }}
+  namespace: {{ include "openshift-gitops.argocdNamespace" $ }}
+  labels:
+    argocd.argoproj.io/secret-type: repository
+    {{- include "openshift-gitops.labels" $ | nindent 4 }}
+  {{- with (include "openshift-gitops.annotations" $) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+type: Opaque
+stringData:
+  # Repository type (git or helm)
+  type: {{ .type }}
+  
+  # Repository URL
+  url: {{ .url }}
+  
+  # Repository name
+  name: {{ .name }}
+  
+  {{- if eq .type "git" }}
+  {{- if .sshPrivateKeySecret }}
+  # SSH private key (for git repositories)
+  # NOTE: The actual key should be stored in a separate secret
+  # and referenced here, not stored inline in values
+  # This is a placeholder - replace with actual secret reference
+  sshPrivateKey: |
+    # TODO: Store actual SSH key in a secure secret
+    # Then reference it using ExternalSecrets or SealedSecrets
+  {{- end }}
+  
+  {{- if .username }}
+  # Username for HTTPS auth
+  username: {{ .username }}
+  {{- end }}
+  
+  {{- if .password }}
+  # Password for HTTPS auth
+  # SECURITY WARNING: Do not store passwords in values.yaml
+  # Use ExternalSecrets or SealedSecrets instead
+  password: {{ .password }}
+  {{- end }}
+  {{- end }}
+  
+  {{- if eq .type "helm" }}
+  {{- if .username }}
+  # Username for Helm repository auth
+  username: {{ .username }}
+  {{- end }}
+  
+  {{- if .password }}
+  # Password for Helm repository auth
+  # SECURITY WARNING: Do not store passwords in values.yaml
+  # Use ExternalSecrets or SealedSecrets instead
+  password: {{ .password }}
+  {{- end }}
+  
+  {{- if .tlsClientCertData }}
+  # TLS client certificate
+  tlsClientCertData: {{ .tlsClientCertData }}
+  {{- end }}
+  
+  {{- if .tlsClientCertKey }}
+  # TLS client certificate key
+  tlsClientCertKey: {{ .tlsClientCertKey }}
+  {{- end }}
+  {{- end }}
+  
+  {{- if .insecure }}
+  # Skip server verification
+  insecure: "{{ .insecure }}"
+  {{- end }}
+  
+  {{- if .enableLfs }}
+  # Enable Git LFS support
+  enableLfs: "{{ .enableLfs }}"
+  {{- end }}
+  
+  {{- if .project }}
+  # Associate with specific project
+  project: {{ .project }}
+  {{- end }}
+{{- end }}
+{{- end }}

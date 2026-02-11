@@ -1,0 +1,29 @@
+# Helm
+*.tgz
+charts/*/charts/
+.cr-*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Secrets (should never be committed)
+*secret*.yaml
+*credentials*.yaml
+*.key
+*.pem
+
+# Helm local cache
+.helmignore

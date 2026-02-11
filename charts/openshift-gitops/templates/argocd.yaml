@@ -1,0 +1,237 @@
+{{- if .Values.argocd.enabled }}
+---
+apiVersion: {{ include "argocd.apiVersion" . }}
+kind: ArgoCD
+metadata:
+  name: {{ .Values.argocd.name }}
+  namespace: {{ include "openshift-gitops.argocdNamespace" . }}
+  labels:
+    {{- include "openshift-gitops.labels" . | nindent 4 }}
+  {{- with (include "openshift-gitops.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  # SSO Configuration
+  {{- if .Values.argocd.sso.enabled }}
+  sso:
+    provider: {{ .Values.argocd.sso.provider }}
+    {{- if eq .Values.argocd.sso.provider "dex" }}
+    dex:
+      openShiftOAuth: true
+    {{- end }}
+  {{- end }}
+  
+  # Server component
+  server:
+    replicas: {{ .Values.argocd.server.replicas }}
+    
+    resources:
+      {{- toYaml .Values.argocd.server.resources | nindent 6 }}
+    
+    {{- if .Values.argocd.server.autoscaling.enabled }}
+    autoscale:
+      enabled: true
+      hpa:
+        maxReplicas: {{ .Values.argocd.server.autoscaling.maxReplicas }}
+        minReplicas: {{ .Values.argocd.server.autoscaling.minReplicas }}
+        {{- if .Values.argocd.server.autoscaling.targetCPUUtilizationPercentage }}
+        targetCPUUtilizationPercentage: {{ .Values.argocd.server.autoscaling.targetCPUUtilizationPercentage }}
+        {{- end }}
+        {{- if .Values.argocd.server.autoscaling.targetMemoryUtilizationPercentage }}
+        targetMemoryUtilizationPercentage: {{ .Values.argocd.server.autoscaling.targetMemoryUtilizationPercentage }}
+        {{- end }}
+    {{- end }}
+    
+    {{- if .Values.argocd.server.route.enabled }}
+    route:
+      enabled: true
+      {{- with .Values.argocd.server.route.tls }}
+      tls:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    
+    {{- if .Values.argocd.server.ingress.enabled }}
+    ingress:
+      enabled: true
+      {{- with .Values.argocd.server.ingress }}
+      {{- if .className }}
+      ingressClassName: {{ .className }}
+      {{- end }}
+      {{- with .annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .hosts }}
+      hosts:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .tls }}
+      tls:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+    
+    # Insecure mode (disable TLS)
+    insecure: {{ .Values.argocd.server.insecure | default false }}
+    
+    # GRPC configuration
+    grpc:
+      ingress:
+        enabled: {{ .Values.argocd.server.grpc.enabled | default false }}
+  
+  # Repository server component
+  repo:
+    replicas: {{ .Values.argocd.repo.replicas }}
+    
+    resources:
+      {{- toYaml .Values.argocd.repo.resources | nindent 6 }}
+    
+    {{- with .Values.argocd.repo.env }}
+    env:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    
+    {{- with .Values.argocd.repo.volumeMounts }}
+    volumeMounts:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    
+    {{- with .Values.argocd.repo.volumes }}
+    volumes:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  
+  # Application controller component
+  controller:
+    replicas: {{ .Values.argocd.controller.replicas }}
+    
+    resources:
+      {{- toYaml .Values.argocd.controller.resources | nindent 6 }}
+    
+    {{- if .Values.argocd.controller.sharding.enabled }}
+    sharding:
+      enabled: true
+      replicas: {{ .Values.argocd.controller.sharding.replicas }}
+    {{- end }}
+    
+    processors:
+      operation: {{ .Values.argocd.controller.processors.operation }}
+      status: {{ .Values.argocd.controller.processors.status }}
+    
+    appResyncPeriod: {{ .Values.argocd.controller.appResyncPeriod }}
+    selfHealTimeout: {{ .Values.argocd.controller.selfHealTimeout }}
+    
+    {{- with .Values.argocd.controller.env }}
+    env:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    
+    # Log level for controller
+    logLevel: {{ .Values.argocd.controller.logLevel | default "info" }}
+  
+  # Redis component
+  redis:
+    resources:
+      {{- toYaml .Values.argocd.redis.resources | nindent 6 }}
+  
+  # High Availability configuration
+  {{- if .Values.argocd.ha.enabled }}
+  ha:
+    enabled: true
+    {{- with .Values.argocd.ha.redisProxyReplicas }}
+    redisProxyReplicas: {{ . }}
+    {{- end }}
+  {{- end }}
+  
+  # Dex/SSO configuration - kept for compatibility
+  {{- if .Values.argocd.dex.enabled }}
+  dex:
+    resources:
+      {{- toYaml .Values.argocd.dex.resources | nindent 6 }}
+    {{- if .Values.argocd.sso.enabled }}
+    openShiftOAuth: {{ .Values.argocd.sso.enabled }}
+    {{- end }}
+  {{- else }}
+  dex:
+    {{- if .Values.argocd.sso.enabled }}
+    openShiftOAuth: {{ .Values.argocd.sso.enabled }}
+    {{- end }}
+  {{- end }}
+  
+  # RBAC configuration
+  rbac:
+    defaultPolicy: {{ .Values.argocd.rbac.defaultPolicy | quote }}
+    {{- if .Values.argocd.rbac.policy }}
+    policy: |
+{{ .Values.argocd.rbac.policy | indent 6 }}
+    {{- end }}
+    scopes: {{ .Values.argocd.rbac.scopes | quote }}
+  
+  # Resource tracking method - important for OpenShift
+  resourceTrackingMethod: {{ .Values.argocd.resourceTrackingMethod | default "annotation+label" }}
+  
+  # Kustomize build options
+  kustomizeBuildOptions: {{ .Values.argocd.kustomizeBuildOptions | default "--enable-helm" | quote }}
+  
+  # Resource customizations
+  {{- with .Values.argocd.resourceCustomizations }}
+  resourceCustomizations: |
+{{ . | indent 4 }}
+  {{- end }}
+  
+  # Resource exclusions
+  {{- with .Values.argocd.resourceExclusions }}
+  resourceExclusions: |
+{{ . | indent 4 }}
+  {{- end }}
+  
+  # Notifications controller
+  {{- if .Values.argocd.notifications.enabled }}
+  notifications:
+    enabled: true
+    replicas: {{ .Values.argocd.notifications.replicas }}
+    resources:
+      {{- toYaml .Values.argocd.notifications.resources | nindent 6 }}
+  {{- end }}
+  
+  # ApplicationSet controller
+  {{- if .Values.argocd.applicationSet.enabled }}
+  applicationSet:
+    resources:
+      {{- toYaml .Values.argocd.applicationSet.resources | nindent 6 }}
+    {{- with .Values.argocd.applicationSet.env }}
+    env:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    logLevel: {{ .Values.argocd.applicationSet.logLevel | default "info" }}
+  {{- end }}
+  
+  # Banner configuration
+  {{- if .Values.argocd.banner.enabled }}
+  banner:
+    content: {{ .Values.argocd.banner.content | quote }}
+    {{- with .Values.argocd.banner.url }}
+    url: {{ . | quote }}
+    {{- end }}
+  {{- end }}
+  
+  # Extra configuration for ArgoCD server
+  {{- with .Values.argocd.extraConfig }}
+  extraConfig:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  # Node placement
+  {{- with .Values.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  
+  {{- with .Values.tolerations }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

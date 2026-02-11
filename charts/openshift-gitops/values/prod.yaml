@@ -1,0 +1,364 @@
+# Production Environment Overrides
+# High availability, strict RBAC, maximum resources
+
+operator:
+  # Manual approval for production - controlled updates
+  installPlanApproval: Manual
+  
+  # Pin to specific CSV version for stability
+  startingCSV: "openshift-gitops-operator.v1.11.0"
+
+argocd:
+  # Production namespace
+  namespace: openshift-gitops-prod
+  name: argocd-prod
+  
+  server:
+    # High availability - 3 replicas
+    replicas: 3
+    
+    # Production resources
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+      requests:
+        cpu: 500m
+        memory: 256Mi
+    
+    # Autoscaling for peak loads
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+    
+    route:
+      enabled: true
+      tls:
+        termination: reencrypt
+        insecureEdgeTerminationPolicy: Redirect
+    
+    config:
+      # Disable admin account in production
+      admin.enabled: false
+      
+      # Production timeouts
+      timeout.reconciliation: 180s
+      timeout.hard.reconciliation: 0
+  
+  repo:
+    # Multiple repo servers for HA
+    replicas: 3
+    
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+  
+  controller:
+    # Multiple controllers for HA and performance
+    replicas: 2
+    
+    resources:
+      limits:
+        cpu: 4000m
+        memory: 4Gi
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+    
+    # Higher processing capacity
+    processors:
+      operation: 20
+      status: 30
+    
+    # Faster reconciliation
+    appResyncPeriod: 120
+    
+    # Self-heal timeout
+    selfHealTimeout: 5
+  
+  redis:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+  
+  # Full high availability
+  ha:
+    enabled: true
+    redisProxyReplicas: 3
+  
+  # Disable Dex, use OpenShift OAuth
+  dex:
+    enabled: false
+  
+  # Production SSO with OpenShift
+  sso:
+    enabled: true
+    provider: openshift
+  
+  # Strict RBAC for production
+  rbac:
+    defaultPolicy: 'role:readonly'
+    policy: |
+      # Cluster Admin - full access
+      p, role:cluster-admin, applications, *, */*, allow
+      p, role:cluster-admin, clusters, *, *, allow
+      p, role:cluster-admin, repositories, *, *, allow
+      p, role:cluster-admin, projects, *, *, allow
+      p, role:cluster-admin, accounts, *, *, allow
+      p, role:cluster-admin, gpgkeys, *, *, allow
+      p, role:cluster-admin, certificates, *, *, allow
+      
+      # Platform Admin - manage applications and repos
+      p, role:platform-admin, applications, *, */*, allow
+      p, role:platform-admin, repositories, *, *, allow
+      p, role:platform-admin, projects, get, *, allow
+      
+      # Developer - read and sync only
+      p, role:developer, applications, get, */*, allow
+      p, role:developer, applications, sync, */*, allow
+      p, role:developer, repositories, get, *, allow
+      p, role:developer, projects, get, *, allow
+      
+      # Viewer - read-only
+      p, role:viewer, applications, get, */*, allow
+      p, role:viewer, repositories, get, *, allow
+      p, role:viewer, projects, get, *, allow
+      
+      # Group mappings
+      g, system:cluster-admins, role:cluster-admin
+      g, platform-admins, role:platform-admin
+      g, developers, role:developer
+      g, viewers, role:viewer
+  
+  # Production repositories (git and helm)
+  repositories:
+    - url: https://github.com/emiratesnbd/prod-gitops
+      name: prod-gitops
+      type: git
+      insecure: false
+    - url: https://github.com/emiratesnbd/helm-charts
+      name: internal-charts
+      type: helm
+      insecure: false
+    - url: https://charts.bitnami.com/bitnami
+      name: bitnami
+      type: helm
+      insecure: false
+  
+  # Production projects with strict policies
+  projects:
+    - name: prod-applications
+      description: Production Applications
+      sourceRepos:
+        - 'https://github.com/emiratesnbd/prod-*'
+        - 'https://github.com/emiratesnbd/helm-charts'
+      destinations:
+        - namespace: 'prod-*'
+          server: https://kubernetes.default.svc
+      clusterResourceWhitelist:
+        - group: ''
+          kind: Namespace
+      clusterResourceBlacklist:
+        - group: ''
+          kind: ResourceQuota
+        - group: ''
+          kind: LimitRange
+        - group: 'rbac.authorization.k8s.io'
+          kind: ClusterRole
+        - group: 'rbac.authorization.k8s.io'
+          kind: ClusterRoleBinding
+      namespaceResourceWhitelist:
+        - group: '*'
+          kind: '*'
+      namespaceResourceBlacklist:
+        - group: ''
+          kind: ResourceQuota
+        - group: ''
+          kind: LimitRange
+      orphanedResources:
+        warn: true
+      syncWindows:
+        - kind: allow
+          schedule: '0 6-18 * * *'  # Allow sync during business hours
+          duration: 12h
+          applications:
+            - '*'
+          namespaces:
+            - prod-*
+    
+    - name: platform-infrastructure
+      description: Platform Infrastructure (Monitoring, Logging, Security)
+      sourceRepos:
+        - 'https://github.com/emiratesnbd/platform-*'
+      destinations:
+        - namespace: 'monitoring'
+          server: https://kubernetes.default.svc
+        - namespace: 'logging'
+          server: https://kubernetes.default.svc
+        - namespace: 'security'
+          server: https://kubernetes.default.svc
+      clusterResourceWhitelist:
+        - group: '*'
+          kind: '*'
+      syncWindows:
+        - kind: deny
+          schedule: '0 0-6 * * *'  # No sync during night hours
+          duration: 6h
+          applications:
+            - '*'
+    
+    - name: shared-services
+      description: Shared Services (Databases, Message Queues)
+      sourceRepos:
+        - 'https://github.com/emiratesnbd/shared-*'
+        - 'https://charts.bitnami.com/*'
+      destinations:
+        - namespace: 'shared-*'
+          server: https://kubernetes.default.svc
+  
+  # Resource customizations for production
+  resourceCustomizations: |
+    argoproj.io/Application:
+      health.lua: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+        end
+        return hs
+    
+    cert-manager.io/Certificate:
+      health.lua: |
+        hs = {}
+        if obj.status ~= nil then
+          if obj.status.conditions ~= nil then
+            for i, condition in ipairs(obj.status.conditions) do
+              if condition.type == "Ready" and condition.status == "False" then
+                hs.status = "Degraded"
+                hs.message = condition.message
+                return hs
+              end
+              if condition.type == "Ready" and condition.status == "True" then
+                hs.status = "Healthy"
+                hs.message = condition.message
+                return hs
+              end
+            end
+          end
+        end
+        hs.status = "Progressing"
+        hs.message = "Waiting for certificate"
+        return hs
+  
+  # Exclude ephemeral resources from sync
+  resourceExclusions: |
+    - apiGroups:
+        - tekton.dev
+      kinds:
+        - TaskRun
+        - PipelineRun
+      clusters:
+        - "*"
+    - apiGroups:
+        - batch
+      kinds:
+        - Job
+      clusters:
+        - "*"
+  
+  # Enable notifications for production
+  notifications:
+    enabled: true
+    replicas: 2
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  
+  # Enable ApplicationSet controller
+  applicationSet:
+    enabled: true
+    replicas: 2
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+  
+  # Production banner
+  banner:
+    enabled: true
+    content: "🔒 PRODUCTION ENVIRONMENT - Changes require approval"
+    url: "https://wiki.emiratesnbd.com/gitops/prod-change-process"
+
+# RBAC for production
+rbac:
+  create: true
+  serviceAccount:
+    create: true
+    name: argocd-prod
+    annotations:
+      # Add annotations for service mesh, monitoring, etc.
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8083"
+
+# Labels for production environment
+labels:
+  environment: production
+  managed-by: platform-engineering
+  compliance: "pci-dss"
+  backup: "true"
+  monitoring: "true"
+
+# Annotations for production
+annotations:
+  environment: production
+  team: platform-engineering
+  owner: "platform-engineering@emiratesnbd.com"
+  backup-schedule: "0 */6 * * *"  # Every 6 hours
+  compliance: "pci-dss,iso27001"
+  change-management: "required"
+
+# Node selector for production - use dedicated nodes
+nodeSelector:
+  node-role.kubernetes.io/infra: ""
+
+# Tolerations for production nodes
+tolerations:
+  - key: "node-role.kubernetes.io/infra"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+# Anti-affinity to spread pods across nodes
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - openshift-gitops
+        topologyKey: kubernetes.io/hostname

@@ -1,0 +1,18 @@
+{{- if .Values.operator.enabled }}
+---
+apiVersion: {{ include "operatorgroup.apiVersion" . }}
+kind: OperatorGroup
+metadata:
+  name: {{ include "openshift-gitops.operatorNamespace" . }}-operatorgroup
+  namespace: {{ include "openshift-gitops.operatorNamespace" . }}
+  labels:
+    {{- include "openshift-gitops.labels" . | nindent 4 }}
+  {{- with (include "openshift-gitops.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  # AllNamespaces - operator will watch all namespaces
+  # This is required for OpenShift GitOps operator to manage ArgoCD across namespaces
+  upgradeStrategy: Default
+{{- end }}
