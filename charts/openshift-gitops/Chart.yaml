@@ -11,7 +11,7 @@ sources:
 icon: https://argo-cd.readthedocs.io/en/stable/assets/logo.png
 maintainers:
   - name: Platform Engineering Team
-    email: platform@emiratesnbd.com
+    email: 
 keywords:
   - openshift
   - gitops
