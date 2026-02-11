@@ -18,6 +18,3 @@ keywords:
   - argocd
   - operator
   - devops
-annotations:
-  changelog: |
-    v1.1.0: All critical bugs from v1.0.0 fixed. Production ready.
